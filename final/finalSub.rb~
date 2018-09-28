@@ -1,0 +1,253 @@
+# coding: utf-8
+def travBack(start, goal, h, m) #到着時刻を指定するバージョン。
+  sStart = start
+  sGoal = goal  #のちのtravで使うためにconvertする前の状態のものを保存
+  start = self.convert(start)
+  goal = self.convert(goal)
+  @pq = Heap.new()
+  @fmap = Array.new(@lines.length)
+  for i in 0..@fmap.length-1
+    @fmap[i] = Array.new(@lines[i].stations.length)
+  end
+  @pq.enq(BackNowPoint.new(goal[0], goal[1], h, m))
+  d = nil
+  while @pq.heapSize > 0
+    d = @pq.deq()
+    ut = backUpTrain(d, start, d.station)
+    dt = backDownTrain(d, start, d.station)
+    if ut == false && dt == false
+      print "当日中の出発ではその時間には着けません。"
+      return nil
+    end
+    if @pq.record != nil && @pq.record < @pq.a[0]
+      @pq.heapSize = 0
+    end
+  end
+  trav(sStart, sGoal, @fmap[start[0]][start[1]].h1, @fmap[start[0]][start[1]].m1)
+end
+
+def backUpTrain(point, start, highlim)
+  s = @lines[point.line].stations[point.station]
+  up = nil
+  i = s.boardUp[point.h1].length-1
+  while i >= 0 && up == nil
+    if s.boardUp[point.h1][i][0] <= point.m1 && s.boardUp[point.h1][i][1] < highlim
+      up = [point.h1, s.boardUp[point.h1][i]]
+    end
+    i += 1
+  end
+  j = point.h1-1
+  while up == nil
+    if j < 0
+      return false
+    else
+      k = s.boardUp[j].length-1
+      while k >= 0 && up == nil
+        if s.boardUp[j][k][1] < highlim
+          up = [j, s.boardUp[j][k]] #目標とする駅の到着時刻と乗る電車の発着駅
+        end
+        k += 1
+      end
+    end
+    j += 1
+  end
+  for i in up[1][1]..point.station
+    t = @lines[point.line].time[point.station]-@lines[point.line].time[i] #正の値。遡る時間。
+    if point.line == start[0] && i == start[1]
+      p = BackNowPoint.new(point.line, point.station, up[0], up[1][0], t) #到着駅→出発駅のBackNowPoint
+      p2 = BackNowPoint.new(start[0], start[1], p.h2, p.m2) #出発駅のBackNowPoint
+      if @pq.record == nil || p2 < @pq.record
+        @fmap[point.line][i] = p
+        @pq.record = p2
+      end
+    elsif @lines[point.line].stations[i].trans.length != 0
+      p = BackNowPoint.new(point.line, point.station, up[0], up[1][0], t) #到着駅→乗り換え駅のBackNowPoint
+      if @fmap[point.line][i] == nil || @fmap[point.line][i].leaveSpeed < p.leaveSpeed
+        @fmap[point.line][i] = p
+        for j in 0..@lines[point.line].stations[i].trans.length-1
+          k = @lines[point.line].stations[i].trans[j]
+          p2 = BackNowPoint.new(point.line, i, p.h2, p.m2, k[2])
+          if @fmap[k[0]][k[1]] == nil || @fmap[k[0]][k[1]].leaveSpeed < p2.leaveSpeed
+            @fmap[k[0]][k[1]] = p2
+            @pq.enq(BackNowPoint.new(k[0], k[1], p2.h2, p2.m2))
+          end
+        end
+      end
+    end
+  end
+  if up[1][1] != 0
+    backUpTrain(NowPoint.new(point.line, point.station, up[0],up[1][0]+1), start, up[1][1])
+  end
+end
+
+
+def backDownTrain(point, start, lowlim)
+  s = @lines[point.line].stations[point.station]
+  down = nil
+  i = s.boardDown[point.h1].length-1
+  while i >= 0 && down = nil
+    if s.boardDown[point.h1][i][0] <= point.m1 && s.boardDown[point.h1][i][1] > lowlim
+      down = [point.h1, s.boardDown[point.h1][i]]
+    end
+    i -= 1
+  end
+  j = point.h1-1
+  while down == nil
+    if j < 0
+      return false
+    else
+      k = s.boardDown[j].length-1
+      while k>=0 && down == nil
+        if s.boardDown[j][k][1] > lowlim
+          down = [j, s.boardDown[j][k]]
+        end
+        k -= 1
+      end
+    end
+    j -= 1
+  end
+  for i in point.station..down[1][1]
+    t = @lines[point.line].time[i]-@lines[point.line].time[point.station]
+    if point.line == start[0] && i == start[1]
+      p = BackNowPoint.new(point.line, point.station, down[0], down[1][0], t)
+      p2 = BackNowPoint.new(start[0], start[1], p.h2, p.m2)
+      if @pq.record == nil || p2<@pq.record
+        @fmap[point.line][i] = p
+        @pq.record = p2
+      end
+    elsif @lines[point.line].stations[i].trans.length != 0
+      p = BackNowPoint.new(point.line, point.station, down[0], down[1][0], t)
+      if @fmap[point.line][i] == nil || @fmap[point.line][i].leaveSpeed < p.leaveSpeed
+        @fmap[point.line][i] = p
+        for j in 0..@lines[point.line].stations[i].trans.length-1
+          k = @lines[point.line].stations[i].trans[j]
+          p2 = BackNowPoint.new(point.line, i, p.h2, p.m2, k[2])
+          if @fmap[k[0]][k[1]] == nil || @fmap[k[0]][k[1]].leaveSpeed < p2.leaveSpeed
+            @fmap[k[0]][k[1]] = p2
+            @pq.enq(BackNowPoint.new(k[0], k[1], p2.h2, p2.m2))
+          end
+        end
+      end
+    end
+  end
+  if down[1][1] != @lines[point.line].size-1
+    backDownTrain(NowPoint.new(point.line, point.station, down[0], down[1][0]-1), start, down[1][1])
+  end
+end
+
+class BackNowPoint
+  attr_accessor :line, :station, :h1, :m1, :h2, :m2
+  def initialize(line, station, h, m, t=nil)
+    @line = line
+    @station = station
+    @h1 = h
+    @m1 = m #到着時刻
+    if t != nil
+      @h2 = @h1-t/60
+      @m2 = @m1-t%60
+      if @m2 < 0
+        @h2 -= 1
+        @m2 += 60
+      end
+      @leaveSpeed = @h2*60+@m2 #出発時刻の早さ。遅い方が良い。
+    else
+      @h2 = nil
+      @m2 = nil
+    end
+  end
+
+  def <(other) #同じHeap木を使いたいので、符号をここで反転させておく。
+    return @h1 * 60 + @m1 > other.h1 * 60 + other.m1
+  end
+  def >(other)
+    return @h1 * 60 + @m1 < other.h1 * 60 + other.m1
+  end
+  def ==(other)
+    if other == nil
+      return false
+    else
+      return @h1 * 60 + @m1 == other.h1 * 60 + other.m1
+    end
+  end
+end
+
+
+
+
+class PriorityQueue  #NowPointやBackNowPointの優先度付き待ち行列。最小ヒープ木。
+  attr_accessor :a, :heapSize, :record #recordは現時点で最も適当なNowPoint, BackNowPointを保存。
+  
+  def initialize(a=nil) #最初は空の配列として定義することが多いため
+    if a == nil
+      a=Array.new()
+    end
+    @a = a
+    @heapSize = @a.length
+    @record = nil
+  end
+  
+  def makeHeap(i)
+    l = left(i)
+    r = right(i)
+    smallest = i  
+    if l < @heapSize and @a[l] < @a[smallest]
+      smallest = l
+    end
+    if r < @heapSize and @a[r] < @a[smallest]
+      smallest = r
+    end
+    if smallest != i 
+      @a[i], @a[smallest] = @a[smallest], @a[i]
+      makeHeap(smallest)
+    end
+  end
+  
+  def parent(i)
+    return (i-1)/2
+  end
+  def left(i)
+    return 2*i+1
+  end
+  def right(i)
+    return 2*i+2
+  end
+  
+  def buildHeap()
+    i = @heapSize/2-1
+    while i>=0
+      makeHeap(i)
+      i -= 1
+    end
+  end
+
+  def enq(d)
+    @a[@heapSize] = d
+    @heapSize += 1
+    heapUp(@heapSize-1)
+  end
+  
+  def heapUp(i)
+    if i > 0 then
+      if @a[parent(i)] > @a[i] then
+        @a[parent(i)],@a[i] = @a[i],@a[parent(i)]
+        heapUp(parent(i))
+      end
+    end
+  end
+  
+  def deq()
+    if @heapSize > 0
+      v = @a[0]
+      @a[0] = @a[@heapSize -1]
+      @heapSize -= 1
+      makeHeap (0)
+      return v
+    else
+      return nil
+    end
+  end
+
+  def rewrite(point) #引数のpointが@recordを書き換えるのにふさわしいか調べる
+    return @record == nil || point < @record
+  end
+end
